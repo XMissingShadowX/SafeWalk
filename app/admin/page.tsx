@@ -2,28 +2,49 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
+interface Incident {
+  id: string
+  title: string
+  incident_type: string
+  severity: string
+  reported_at: string
+  is_active: boolean
+  profiles?: { full_name: string }
+}
+
 export default function AdminPage() {
-  const [incidents, setIncidents] = useState([])
+  const [incidents, setIncidents] = useState<Incident[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
-  const supabase = createClient()
 
   useEffect(() => {
-    // Verificar si el usuario es admin
-    supabase.rpc('is_admin', { uid: (await supabase.auth.getUser()).data.user?.id })
-      .then(({ data }) => setIsAdmin(data))
+    const supabase = createClient()
 
-    // Cargar todos los incidentes (incluyendo inactivos para moderar)
-    supabase.from('incidents').select('*, profiles(full_name)')
-      .order('reported_at', { ascending: false })
-      .then(({ data }) => setIncidents(data ?? []))
+    const load = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: adminCheck } = await supabase
+        .rpc('is_admin', { uid: user.id })
+      setIsAdmin(!!adminCheck)
+
+      const { data } = await supabase
+        .from('incidents')
+        .select('*, profiles(full_name)')
+        .order('reported_at', { ascending: false })
+      setIncidents(data ?? [])
+    }
+
+    load()
   }, [])
 
   const deactivate = async (id: string) => {
+    const supabase = createClient()
     await supabase.from('incidents').update({ is_active: false }).eq('id', id)
     setIncidents(prev => prev.filter(i => i.id !== id))
   }
 
   const verify = async (id: string) => {
+    const supabase = createClient()
     await supabase.from('incidents').update({ is_verified: true }).eq('id', id)
   }
 
