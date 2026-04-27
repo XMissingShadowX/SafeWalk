@@ -18,22 +18,17 @@ export default function AdminPage() {
 
   useEffect(() => {
     const supabase = createClient()
-
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
-      const { data: adminCheck } = await supabase
-        .rpc('is_admin', { uid: user.id })
+      const { data: adminCheck } = await supabase.rpc('is_admin', { uid: user.id })
       setIsAdmin(!!adminCheck)
-
       const { data } = await supabase
         .from('incidents')
         .select('*, profiles(full_name)')
         .order('reported_at', { ascending: false })
       setIncidents(data ?? [])
     }
-
     load()
   }, [])
 
