@@ -4,6 +4,11 @@ const config: CapacitorConfig = {
   appId: 'com.safewalk.app',
   appName: 'safewalk',
   webDir: 'out',
+  server: {
+    url: 'https://safe-walk-git-apk-build-xmissingshadowxs-projects.vercel.app',
+    cleartext: true,
+    androidScheme: 'https',
+  },
 };
 
 export default config;
