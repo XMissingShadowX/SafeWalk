@@ -1,6 +1,6 @@
 'use client'
-
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { Geolocation } from '@capacitor/geolocation'
 import type { Coordinates } from '@/lib/types'
 
 interface UseGeolocationOptions {
@@ -30,57 +30,52 @@ export function useGeolocation(options: UseGeolocationOptions = {}): Geolocation
     error: null,
   })
 
-  const watchIdRef = useRef<number | null>(null)
+  const watchIdRef = useRef<string | null>(null)
 
-  const onSuccess = useCallback((position: GeolocationPosition) => {
+  const onSuccess = useCallback((latitude: number, longitude: number, accuracy: number) => {
     setState({
-      coordinates: {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-      },
+      coordinates: { latitude, longitude, accuracy },
       loading: false,
       error: null,
     })
   }, [])
 
-  const onError = useCallback((error: GeolocationPositionError) => {
-    let message = 'Unable to retrieve location'
-    switch (error.code) {
-      case error.PERMISSION_DENIED:
-        message = 'Location access denied. Enable location in settings.'
-        break
-      case error.POSITION_UNAVAILABLE:
-        message = 'Location information unavailable.'
-        break
-      case error.TIMEOUT:
-        message = 'Location request timed out.'
-        break
-    }
+  const onError = useCallback((message: string) => {
     setState((prev) => ({ ...prev, loading: false, error: message }))
   }, [])
 
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setState({ coordinates: null, loading: false, error: 'Geolocation not supported.' })
-      return
-    }
-
-    const positionOptions: PositionOptions = {
+    const positionOptions = {
       enableHighAccuracy,
       timeout,
       maximumAge,
     }
 
     if (watch) {
-      watchIdRef.current = navigator.geolocation.watchPosition(onSuccess, onError, positionOptions)
+      Geolocation.watchPosition(positionOptions, (position, err) => {
+        if (err || !position) {
+          onError('Unable to retrieve location.')
+          return
+        }
+        onSuccess(position.coords.latitude, position.coords.longitude, position.coords.accuracy)
+      }).then((id) => {
+        watchIdRef.current = id
+      }).catch(() => {
+        onError('Location access denied. Enable location in settings.')
+      })
     } else {
-      navigator.geolocation.getCurrentPosition(onSuccess, onError, positionOptions)
+      Geolocation.getCurrentPosition(positionOptions)
+        .then((position) => {
+          onSuccess(position.coords.latitude, position.coords.longitude, position.coords.accuracy)
+        })
+        .catch(() => {
+          onError('Location access denied. Enable location in settings.')
+        })
     }
 
     return () => {
       if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current)
+        Geolocation.clearWatch({ id: watchIdRef.current })
         watchIdRef.current = null
       }
     }

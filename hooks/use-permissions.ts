@@ -1,8 +1,5 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Camera } from '@capacitor/camera'
-import { Geolocation } from '@capacitor/geolocation'
-import { LocalNotifications } from '@capacitor/local-notifications'
 
 export type PermissionName = 'geolocation' | 'notifications' | 'camera' | 'microphone'
 export interface PermissionState {
@@ -11,6 +8,8 @@ export interface PermissionState {
   camera: PermissionStatus['state'] | 'unknown'
   microphone: PermissionStatus['state'] | 'unknown'
 }
+
+const isNative = () => typeof window !== 'undefined' && !!(window as any).Capacitor?.isNativePlatform?.()
 
 export function usePermissions() {
   const [permissions, setPermissions] = useState<PermissionState>({
@@ -21,61 +20,42 @@ export function usePermissions() {
   })
   const [allGranted, setAllGranted] = useState(false)
 
-  const checkPermission = useCallback(async (name: PermissionName) => {
-    try {
-      if (name === 'geolocation') {
-        const result = await Geolocation.checkPermissions()
-        return result.location === 'granted' ? 'granted' : result.location === 'denied' ? 'denied' : 'prompt'
-      }
-      if (name === 'camera' || name === 'microphone') {
-        const result = await Camera.checkPermissions()
-        if (name === 'camera') {
-          return result.camera === 'granted' ? 'granted' : result.camera === 'denied' ? 'denied' : 'prompt'
-        }
-        // micrófono via navegador
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-          stream.getTracks().forEach(t => t.stop())
-          return 'granted'
-        } catch {
-          return 'denied'
-        }
-      }
-      if (name === 'notifications') {
-        const result = await LocalNotifications.checkPermissions()
-        return result.display === 'granted' ? 'granted' : result.display === 'denied' ? 'denied' : 'prompt'
-      }
-      return 'unknown' as PermissionStatus['state']
-    } catch {
-      return 'unknown' as PermissionStatus['state']
-    }
-  }, [])
-
   const requestGeolocation = useCallback(async () => {
     try {
-      const result = await Geolocation.requestPermissions()
-      return result.location === 'granted'
-    } catch {
-      return false
-    }
+      if (isNative()) {
+        const { Geolocation } = await import('@capacitor/geolocation')
+        const result = await Geolocation.requestPermissions()
+        return result.location === 'granted'
+      }
+      return new Promise<boolean>((resolve) => {
+        navigator.geolocation.getCurrentPosition(() => resolve(true), () => resolve(false))
+      })
+    } catch { return false }
   }, [])
 
   const requestNotifications = useCallback(async () => {
     try {
-      const result = await LocalNotifications.requestPermissions()
-      return result.display === 'granted'
-    } catch {
-      return false
-    }
+      if (isNative()) {
+        const { LocalNotifications } = await import('@capacitor/local-notifications')
+        const result = await LocalNotifications.requestPermissions()
+        return result.display === 'granted'
+      }
+      const result = await Notification.requestPermission()
+      return result === 'granted'
+    } catch { return false }
   }, [])
 
   const requestCamera = useCallback(async () => {
     try {
-      const result = await Camera.requestPermissions({ permissions: ['camera'] })
-      return result.camera === 'granted'
-    } catch {
-      return false
-    }
+      if (isNative()) {
+        const { Camera } = await import('@capacitor/camera')
+        const result = await Camera.requestPermissions({ permissions: ['camera'] })
+        return result.camera === 'granted'
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      stream.getTracks().forEach(t => t.stop())
+      return true
+    } catch { return false }
   }, [])
 
   const requestMicrophone = useCallback(async () => {
@@ -83,9 +63,7 @@ export function usePermissions() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       stream.getTracks().forEach(t => t.stop())
       return true
-    } catch {
-      return false
-    }
+    } catch { return false }
   }, [])
 
   const requestAll = useCallback(async () => {
@@ -108,18 +86,29 @@ export function usePermissions() {
 
   useEffect(() => {
     const check = async () => {
-      const [geo, notif, cam, mic] = await Promise.all([
-        checkPermission('geolocation'),
-        checkPermission('notifications'),
-        checkPermission('camera'),
-        checkPermission('microphone'),
-      ])
-      const state = { geolocation: geo, notifications: notif, camera: cam, microphone: mic }
-      setPermissions(state)
-      setAllGranted(geo === 'granted' && notif === 'granted')
+      try {
+        if (isNative()) {
+          const { Geolocation } = await import('@capacitor/geolocation')
+          const { Camera } = await import('@capacitor/camera')
+          const { LocalNotifications } = await import('@capacitor/local-notifications')
+          const [geo, cam, notif] = await Promise.all([
+            Geolocation.checkPermissions(),
+            Camera.checkPermissions(),
+            LocalNotifications.checkPermissions(),
+          ])
+          const state: PermissionState = {
+            geolocation: geo.location === 'granted' ? 'granted' : 'prompt',
+            camera: cam.camera === 'granted' ? 'granted' : 'prompt',
+            notifications: notif.display === 'granted' ? 'granted' : 'prompt',
+            microphone: 'unknown',
+          }
+          setPermissions(state)
+          setAllGranted(state.geolocation === 'granted' && state.notifications === 'granted')
+        }
+      } catch { /* silently fail */ }
     }
     check()
-  }, [checkPermission])
+  }, [])
 
   return { permissions, allGranted, requestAll, requestGeolocation, requestNotifications, requestCamera, requestMicrophone }
 }
