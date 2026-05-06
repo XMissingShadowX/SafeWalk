@@ -1,9 +1,10 @@
 'use client'
-
 import { useState, useEffect, useCallback } from 'react'
+import { Camera } from '@capacitor/camera'
+import { Geolocation } from '@capacitor/geolocation'
+import { LocalNotifications } from '@capacitor/local-notifications'
 
 export type PermissionName = 'geolocation' | 'notifications' | 'camera' | 'microphone'
-
 export interface PermissionState {
   geolocation: PermissionStatus['state'] | 'unknown'
   notifications: PermissionStatus['state'] | 'unknown'
@@ -22,32 +23,47 @@ export function usePermissions() {
 
   const checkPermission = useCallback(async (name: PermissionName) => {
     try {
-      if (name === 'notifications') {
-        const state = Notification.permission === 'granted' ? 'granted'
-          : Notification.permission === 'denied' ? 'denied' : 'prompt'
-        return state as PermissionStatus['state']
+      if (name === 'geolocation') {
+        const result = await Geolocation.checkPermissions()
+        return result.location === 'granted' ? 'granted' : result.location === 'denied' ? 'denied' : 'prompt'
       }
-      const result = await navigator.permissions.query({ name: name as PermissionDescriptor['name'] })
-      return result.state
+      if (name === 'camera' || name === 'microphone') {
+        const result = await Camera.checkPermissions()
+        if (name === 'camera') {
+          return result.camera === 'granted' ? 'granted' : result.camera === 'denied' ? 'denied' : 'prompt'
+        }
+        // micrófono via navegador
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+          stream.getTracks().forEach(t => t.stop())
+          return 'granted'
+        } catch {
+          return 'denied'
+        }
+      }
+      if (name === 'notifications') {
+        const result = await LocalNotifications.checkPermissions()
+        return result.display === 'granted' ? 'granted' : result.display === 'denied' ? 'denied' : 'prompt'
+      }
+      return 'unknown' as PermissionStatus['state']
     } catch {
       return 'unknown' as PermissionStatus['state']
     }
   }, [])
 
-  const requestGeolocation = useCallback(() => {
-    return new Promise<boolean>((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        () => resolve(true),
-        () => resolve(false),
-        { enableHighAccuracy: true }
-      )
-    })
+  const requestGeolocation = useCallback(async () => {
+    try {
+      const result = await Geolocation.requestPermissions()
+      return result.location === 'granted'
+    } catch {
+      return false
+    }
   }, [])
 
   const requestNotifications = useCallback(async () => {
     try {
-      const result = await Notification.requestPermission()
-      return result === 'granted'
+      const result = await LocalNotifications.requestPermissions()
+      return result.display === 'granted'
     } catch {
       return false
     }
@@ -55,9 +71,8 @@ export function usePermissions() {
 
   const requestCamera = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
-      stream.getTracks().forEach(t => t.stop())
-      return true
+      const result = await Camera.requestPermissions({ permissions: ['camera'] })
+      return result.camera === 'granted'
     } catch {
       return false
     }

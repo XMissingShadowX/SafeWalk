@@ -14,8 +14,11 @@
   "dependencies": {
     "@ai-sdk/groq": "^1.2.9",
     "@capacitor/android": "^8.3.1",
+    "@capacitor/camera": "^8.2.0",
     "@capacitor/cli": "^8.3.1",
     "@capacitor/core": "^8.3.1",
+    "@capacitor/geolocation": "^8.2.0",
+    "@capacitor/local-notifications": "^8.0.2",
     "@radix-ui/react-accordion": "^1.2.2",
     "@radix-ui/react-alert-dialog": "^1.1.4",
     "@radix-ui/react-aspect-ratio": "^1.1.1",
