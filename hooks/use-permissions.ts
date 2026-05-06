@@ -67,12 +67,11 @@ export function usePermissions() {
   }, [])
 
   const requestAll = useCallback(async () => {
-    const [geo, notif, cam, mic] = await Promise.all([
-      requestGeolocation(),
-      requestNotifications(),
-      requestCamera(),
-      requestMicrophone(),
-    ])
+    const geo = await requestGeolocation()
+    const notif = await requestNotifications()
+    const cam = await requestCamera()
+    const mic = await requestMicrophone()
+
     const newState: PermissionState = {
       geolocation: geo ? 'granted' : 'denied',
       notifications: notif ? 'granted' : 'denied',
