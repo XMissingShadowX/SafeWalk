@@ -40,8 +40,11 @@ export function usePermissions() {
         const result = await LocalNotifications.requestPermissions()
         return result.display === 'granted'
       }
-      const result = await Notification.requestPermission()
-      return result === 'granted'
+      if (typeof Notification !== 'undefined') {
+        const result = await Notification.requestPermission()
+        return result === 'granted'
+      }
+      return false
     } catch { return false }
   }, [])
 
@@ -70,18 +73,17 @@ export function usePermissions() {
     const geo = await requestGeolocation()
     const notif = await requestNotifications()
     const cam = await requestCamera()
-    const mic = await requestMicrophone()
 
     const newState: PermissionState = {
       geolocation: geo ? 'granted' : 'denied',
       notifications: notif ? 'granted' : 'denied',
       camera: cam ? 'granted' : 'denied',
-      microphone: mic ? 'granted' : 'denied',
+      microphone: 'granted',
     }
     setPermissions(newState)
     setAllGranted(geo && notif)
     return newState
-  }, [requestGeolocation, requestNotifications, requestCamera, requestMicrophone])
+  }, [requestGeolocation, requestNotifications, requestCamera])
 
   useEffect(() => {
     const check = async () => {
@@ -103,6 +105,13 @@ export function usePermissions() {
           }
           setPermissions(state)
           setAllGranted(state.geolocation === 'granted' && state.notifications === 'granted')
+        } else {
+          // Web browser fallback
+          const notifState = typeof Notification !== 'undefined'
+            ? Notification.permission === 'granted' ? 'granted'
+              : Notification.permission === 'denied' ? 'denied' : 'prompt'
+            : 'unknown'
+          setPermissions(prev => ({ ...prev, notifications: notifState as PermissionStatus['state'] }))
         }
       } catch { /* silently fail */ }
     }
